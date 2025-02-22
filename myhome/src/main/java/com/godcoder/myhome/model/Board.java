@@ -1,9 +1,7 @@
 package com.godcoder.myhome.model;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.persistence.*;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
@@ -25,29 +23,8 @@ public class Board {
     private String title;
     private String content;
 
-    // 수동으로 getter, setter 추가
-    /*
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-    public String getTitle() {
-        return title;
-    }
-
-    public void setTitle(String title) {
-        this.title = title;
-    }
-
-    public String getContent() {
-        return content;
-    }
-
-    public void setContent(String content) {
-        this.content = content;
-    }
-    */
+    @ManyToOne
+    @JoinColumn(name = "user_id") // Board에 있는 2번째 컬럼이 user_id임.
+    @JsonIgnore
+    private User user;
 }

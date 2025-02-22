@@ -2,11 +2,18 @@ package com.godcoder.myhome.controller;
 
 import com.godcoder.myhome.model.Board;
 import com.godcoder.myhome.repository.BoardRepository;
+import com.godcoder.myhome.service.BoardService;
 import com.godcoder.myhome.validator.BoardValidator;
 import jakarta.validation.Valid;
 import org.hibernate.validator.messageinterpolation.ParameterMessageInterpolator;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -29,9 +36,23 @@ public class BoardController {
 
     @Autowired
     private BoardValidator boardValidator;
+
+    @Autowired
+    private BoardService boardService;
+
+
     @GetMapping("/list")
-    public  String list(Model model) {
-        List<Board> boards =  boardRepository.findAll();
+    public  String list(Model model,
+                        @PageableDefault(size=2) Pageable pageable,
+                        @RequestParam(required = false, defaultValue = "") String searchText) {
+//        Page<Board> boards = boardRepository.findAll(pageable);
+        Page<Board> boards = boardRepository.findByTitleContainingOrContentContaining(searchText, searchText, pageable);
+        // 시작페이지가 0보다 적으면 안되므로 Math 클래스를 이용하여 최소값을 정해줌.
+        int startPage = Math.max(1, boards.getPageable().getPageNumber() - 4);
+        int endPage = Math.min(boards.getTotalPages(), boards.getPageable().getPageNumber() + 4);
+
+        model.addAttribute("startPage", startPage);
+        model.addAttribute("endPage", endPage);
         model.addAttribute("boards", boards);
         return "board/list";
     }
@@ -41,10 +62,7 @@ public class BoardController {
         if(id == null) {
             model.addAttribute("board", new Board());
         } else {
-            // 뒤에 orElse를 안적으면 빨갛게 에러가 난다. 왜냐면 값이 없을 수도 있기때문이다
-            // 그래서 뒤에 orElse(null)을 줘서 null일 경우에 옵션값을 줬다.
             Board board = boardRepository.findById(id).orElse(null);
-//            model.addAttribute("board", new Board());
             model.addAttribute("board", board);
 
         }
@@ -52,12 +70,32 @@ public class BoardController {
     }
 
     @PostMapping("/form")
-    public String greetingSubmit(@Valid @ModelAttribute Board board, BindingResult bindingResult, Model model) {
+    public String postForm(
+            @Valid @ModelAttribute Board board,
+            Authentication authentication,
+            BindingResult bindingResult,
+            Model model) {
 
         boardValidator.validate(board, bindingResult);
         if(bindingResult.hasErrors()) {
             return "board/form";
         }
+        // => 사용자 정보 가져오기
+        // 만약에 이 페이지에서 인증한 user 정보를 전달하게 되면 post 요청하느 부분을 다른 사용자가 분석해서 다른사람 id도 전달할 수도 있다?
+        // 그렇게 되면 본인이 작성한 것이 아닌데도 들어가는 불상사가 생기게 될 것이다.
+        // 그러면 서버쪽의 인증정보를 활용해서 담아줘야한다.
+        // 인증정보는 스프링 시큐리티에서 활용되지만 그중에 하나가 Authentication이라는 클래스를 받을 수가 있다.
+        // 사용자 정보를 받아서 이것을 바탕으로 이 것을 참조해서 값을 처리할 수 있다.
+        String username = authentication.getName(); // 사용자 이름 가져옴.
+        boardService.save(username, board);
+        //boardRepository.save(board);
+
+        // SecurityContextHoler 방법도 있다.
+        // 위의 방법은 Controller에서 DI? 방법으로 파라메터로 가져오는 방법이고 이 방법은 controller 외에
+        // 서비스 같은 곳이나 다른 클래스에서 인증작업할 때 이런식으로 가져올 수 있다.
+        // 이것말고도 다른 방법도 있다.
+        // Authentication a = SecurityContextHolder.getContext().getAuthentication(); // 이렇게도 authentication을 얻을 수 있다.
+
 
         boardRepository.save(board);
         return "redirect:/board/list";
